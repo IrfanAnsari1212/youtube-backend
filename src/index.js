@@ -1,5 +1,6 @@
 // require("dotenv").config({path: "./.env"});
-
+import express from "express";
+import { app } from "./app.js";
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
 
@@ -15,7 +16,7 @@ connectDB()
            throw err
     })
   })
-  .catht((err) => console.error("DB CONNECTION ERROR", err));
+  .catch((err) => console.error("DB CONNECTION ERROR", err));
 
 
 

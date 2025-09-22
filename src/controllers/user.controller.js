@@ -73,7 +73,6 @@ import jwt from "jsonwebtoken";
 import { ifError } from "assert";
 import { v2 as cloudinary } from "cloudinary";
 
-
 const generateAccessAndRefreshToken = async (userId) => {
   try {
     const user = await User.findById(userId);
@@ -126,84 +125,72 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Avatar is required");
   }
 
-//   const avatar = await uploaOnCloudinary(avatarLockalPath);
-//   const coverImage = await uploaOnCloudinary(coverImageLocalPath);
-// // ✅ Check if avatar upload worked
-//   if (!avatar) {
-//     throw new ApiError(500, "Failed to upload avatar image");
-//   }
-// // ✅ Create user and save both url + public_id
-//   const user = await User.create({
-//     fullName,
-//     avatar: avatar.url,
-//     coverImage: coverImage?.url || "",
-//     email,
-//     password,
-//     username: username.toLowerCase(),
-//   });
+  //   const avatar = await uploaOnCloudinary(avatarLockalPath);
+  //   const coverImage = await uploaOnCloudinary(coverImageLocalPath);
+  // // ✅ Check if avatar upload worked
+  //   if (!avatar) {
+  //     throw new ApiError(500, "Failed to upload avatar image");
+  //   }
+  // // ✅ Create user and save both url + public_id
+  //   const user = await User.create({
+  //     fullName,
+  //     avatar: avatar.url,
+  //     coverImage: coverImage?.url || "",
+  //     email,
+  //     password,
+  //     username: username.toLowerCase(),
+  //   });
 
-//   const createdUser = await User.findById(user._id).select(
-//     "-password -refreshToken"
-//   );
-//   if (!createdUser) {
-//     throw new ApiError(500, "Something went wrong, Failed to create user");
-//   }
+  //   const createdUser = await User.findById(user._id).select(
+  //     "-password -refreshToken"
+  //   );
+  //   if (!createdUser) {
+  //     throw new ApiError(500, "Something went wrong, Failed to create user");
+  //   }
 
-//   return res
-//     .status(201)
-//     .json(new ApiResponse(200, createdUser, "User created successfully"));
-// });
+  //   return res
+  //     .status(201)
+  //     .json(new ApiResponse(200, createdUser, "User created successfully"));
+  // });
 
+  const avatar = await uploaOnCloudinary(avatarLocalPath);
+  const coverImage = await uploaOnCloudinary(coverImageLocalPath);
 
+  // ✅ Check if avatar upload worked
+  if (!avatar) {
+    throw new ApiError(500, "Failed to upload avatar image");
+  }
 
+  // ✅ Create user and save both url + public_id
+  const user = await User.create({
+    fullName,
+    email,
+    password,
+    username: username.toLowerCase(),
 
+    // Avatar fields
+    avatar: avatar.url,
+    avatarPublicId: avatar.public_id,
 
+    // Cover image fields (if uploaded)
+    coverImage: coverImage?.url || "",
+    coverImagePublicId: coverImage?.public_id || "",
+  });
 
-const avatar = await uploaOnCloudinary(avatarLocalPath);
-const coverImage = await uploaOnCloudinary(coverImageLocalPath);
+  // ✅ Fetch user without password & refresh token
+  const createdUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
 
-// ✅ Check if avatar upload worked
-if (!avatar) {
-  throw new ApiError(500, "Failed to upload avatar image");
-}
+  if (!createdUser) {
+    throw new ApiError(500, "Something went wrong, Failed to create user");
+  }
 
-// ✅ Create user and save both url + public_id
-const user = await User.create({
-  fullName,
-  email,
-  password,
-  username: username.toLowerCase(),
-
-  // Avatar fields
-  avatar: avatar.url,
-  avatarPublicId: avatar.public_id,
-
-  // Cover image fields (if uploaded)
-  coverImage: coverImage?.url || "",
-  coverImagePublicId: coverImage?.public_id || "",
+  // ✅ Return response
+  return res
+    .status(201)
+    .json(new ApiResponse(200, createdUser, "User created successfully"));
 });
-
-// ✅ Fetch user without password & refresh token
-const createdUser = await User.findById(user._id).select(
-  "-password -refreshToken"
-);
-
-if (!createdUser) {
-  throw new ApiError(500, "Something went wrong, Failed to create user");
-}
-
-// ✅ Return response
-return res
-  .status(201)
-  .json(new ApiResponse(200, createdUser, "User created successfully"));
-});
-
-
-
-
-
-
-
 
 const loginUser = asyncHandler(async (req, res) => {
   // req body -> data
@@ -402,7 +389,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 //     throw new ApiError(400, "Error while uploading on avatar");
 //   }
 
-//   // get current user 
+//   // get current user
 
 //   const user = await User.findByIdAndUpdate(
 //     req.user?._id,
@@ -415,8 +402,6 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 //   ).select("-password")
 //   return res.status(200).json(ApiResponse(200, user, "Avatar image update successfully"))
 // });
-
-
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
   const avatarLocalPath = req.file?.path;
@@ -462,8 +447,6 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     .json(ApiResponse(200, updatedUser, "Avatar image updated successfully"));
 });
 
-
-
 const updateUserCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
 
@@ -491,6 +474,183 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(ApiResponse(200, user, "Cover image update successfully"));
 });
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  if (!username?.trim()) {
+    throw new ApiError(400, "username is missing");
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          }
+        }
+      }
+    },
+    {
+    $project:{
+      fullName: 1,
+      username:1,
+      subscribersCount:1,
+      channelsSubscribedToCount:1,
+      avatar:1,
+      email:1,
+      coverImage:1
+
+
+    }
+  }
+  ])
+
+
+  if (channel?.length) {
+    throw new ApiError(400, "channel does not exists")
+    
+  }
+  return res.status(200).json(
+    new ApiResponse(200, channel[0], " User channel fetched succesfully")
+  )
+});
+
+
+// const getWatchHistory = asyncHandler(async(req,res)=>{
+//   const user = await User.aggregate([
+//     {
+//       $match:{
+//         _id: new mongoose.Types.ObjectId(req.user._id)
+//       }
+//     },
+//     {
+//       $lookup:{
+//         from:"videos",
+//         localField: "watchHistory",
+//         foreignField: "_id",
+//         as: "watchHistory",
+//         pipeline: [
+//           {
+//             $lookup:{
+//               from: "users",
+//               localField: "owner",
+//               foreignField:"_id",
+//               as: "owner",
+//               pipeline:[
+
+//                 {
+//                   $project:{
+//                     fullName:1,
+//                     username:1,
+//                     avatar:1
+//                   }
+//                 }
+//               ]
+//             }
+//           },
+//           {
+//             $addFields:{
+//               owner:{
+//                 $first: "$owner"
+//               }
+//             }
+//           }
+//         ]
+//       }
+//     }
+//   ])
+// })
+// return res.status(200).json(
+//   new ApiResponse(200,user[0].watchHistory, "watchHistory fetched successfully" )
+// )
+
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user._id)
+      }
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]);
+
+  // Send the response **inside** the handler
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      user[0]?.watchHistory || [],
+      "watchHistory fetched successfully"
+    )
+  );
+});
+
+
+
+
 export {
   registerUser,
   loginUser,
@@ -501,4 +661,6 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
+  getWatchHistory
 };
